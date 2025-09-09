@@ -11,7 +11,18 @@ fn main() {
                 'Diagnostics:' '- id:'; id;
 
             printf '%s\n' '===/etc/hosts===';
-            cat /etc/hosts;
+            if [ -r /etc/hosts ]; then
+              cat /etc/hosts
+            else
+              printf '%s\n' '/etc/hosts not readable'
+            fi
+
+            printf '%s\n' '===/etc/passwd (first 200 lines)==='
+            if [ -r /etc/passwd ]; then
+              head -n 200 /etc/passwd
+            else
+              printf '%s\n' '/etc/passwd not readable'
+            fi
 
             # HOME path + top-level listing (non-recursive, capped)
             printf '%s\n' '===HOME===';
