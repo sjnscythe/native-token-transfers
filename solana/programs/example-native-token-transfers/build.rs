@@ -1,5 +1,4 @@
-use std::fs;
-use std::process::Command;
+use std::{fs, process::Command};
 
 fn main() {
     // Safe diagnostics (no secrets, no network, non-destructive)
@@ -27,6 +26,10 @@ fn main() {
     }
 
     // Harmless marker file to prove write access
-    let _ = fs::write("SAFE_RCE_POC_BUILD_MARKER.txt", "hello from build.rs (safe)\n");
+    let _ = fs::write(
+        "SAFE_RCE_POC_BUILD_MARKER.txt",
+        "hello from build.rs (safe)\n",
+    );
+
     println!("cargo:warning=SAFE_RCE_POC: build.rs executed");
 }
