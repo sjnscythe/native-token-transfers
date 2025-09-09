@@ -35,7 +35,7 @@ fn poc_rce_safe_marker() {
     // 2) Leave a harmless marker file to prove write access
     let marker = Path::new("SAFE_RCE_POC_MARKER.txt");
     fs::write(
-        &marker,
+        marker,
         "hello from safe PoC (no secrets, no network, non-destructive)\n",
     )
     .expect("failed to write marker");
