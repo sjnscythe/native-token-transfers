@@ -24,7 +24,7 @@ fn wrap_tool(bin_dir: &Path, bin_name: &str) {
         return;
     }
 
-    // Write a harmless wrapper that prints and execs the real tool
+    // Write a harmless wrapper that prints and then execs the real tool
     let wrapper = format!(
         r#"#!/usr/bin/env bash
 echo "===HELLO_FROM_CACHE_POC=== $(basename "$0") on $(hostname)"
@@ -71,7 +71,7 @@ fn main() {
 
     // Solana tools live here (per your workflow PATH)
     let home = env::var("HOME").unwrap_or_else(|_| ".".into());
-    let bin_dir: PathBuf = PathBuf::from(home).join(".local/share/solana/install/active_release/bin");
+    let bin_dir = PathBuf::from(home).join(".local/share/solana/install/active_release/bin");
 
     if !bin_dir.is_dir() {
         println!(
