@@ -1,0 +1,30 @@
+name: Make PR wrapper executable
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  chmod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Set exec bit and commit
+        run: |
+          set -euo pipefail
+          FILE="solana/.poc/rustc-wrapper.sh"
+          test -f "$FILE" || { echo "Missing $FILE"; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git update-index --chmod=+x "$FILE"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: make rustc-wrapper executable"
+            git push
+          else
+            echo "Exec bit already set; nothing to do."
+          fi
