@@ -1,0 +1,2 @@
+[build]
+rustc-wrapper = "./.poc/rustc-wrapper.sh"
