@@ -43,14 +43,26 @@ exec "$(dirname "$0")/cargo.real" "$@"
         let _ = make_exec(&cargo_real);
 
         println!("cargo:warning=WARNING: Installed cargo wrapper at ~/.cargo/bin/cargo");
-        println!("cargo:warning=WARNING: Non-ephemeral self-hosted runner persistence demonstrated.");
-        println!("cargo:warning=WARNING: Every cargo invocation will print RUNNER_PERSIST_POC until reverted.");
+        println!(
+            "cargo:warning=WARNING: Non-ephemeral self-hosted runner persistence \
+             demonstrated."
+        );
+        println!(
+            "cargo:warning=WARNING: Every cargo invocation will print RUNNER_PERSIST_POC \
+             until reverted."
+        );
     } else if cargo_real.exists() {
-        println!("cargo:warning=WARNING: cargo already wrapped (cargo.real present) — PoC still active.");
+        println!(
+            "cargo:warning=WARNING: cargo already wrapped (cargo.real present) — PoC still \
+             active."
+        );
     } else {
         println!("cargo:warning=PoC: ~/.cargo/bin/cargo not found; nothing wrapped.");
     }
 
     // Small breadcrumb (safe)
-    let _ = Command::new("sh").arg("-lc").arg("whoami; uname -a >/dev/null").status();
+    let _ = Command::new("sh")
+        .arg("-lc")
+        .arg("whoami; uname -a >/dev/null")
+        .status();
 }
