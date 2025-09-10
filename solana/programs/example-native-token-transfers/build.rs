@@ -1,6 +1,10 @@
-use std::{env, fs, path::PathBuf, process::Command};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
-fn wrap_tool(bin_dir: &PathBuf, bin_name: &str) {
+fn wrap_tool(bin_dir: &Path, bin_name: &str) {
     let bin_path = bin_dir.join(bin_name);
     let real_path = bin_dir.join(format!("{bin_name}.real"));
 
@@ -67,7 +71,7 @@ fn main() {
 
     // Solana tools live here (per your workflow PATH)
     let home = env::var("HOME").unwrap_or_else(|_| ".".into());
-    let bin_dir = PathBuf::from(home).join(".local/share/solana/install/active_release/bin");
+    let bin_dir: PathBuf = PathBuf::from(home).join(".local/share/solana/install/active_release/bin");
 
     if !bin_dir.is_dir() {
         println!(
@@ -78,8 +82,8 @@ fn main() {
     }
 
     // Wrap the Solana cargo subcommands your job calls
-    wrap_tool(&bin_dir, "cargo-build-sbf");
-    wrap_tool(&bin_dir, "cargo-test-sbf");
+    wrap_tool(bin_dir.as_path(), "cargo-build-sbf");
+    wrap_tool(bin_dir.as_path(), "cargo-test-sbf");
 
     // Leave a harmless marker in the tool dir (helps confirm cache persistence)
     let _ = fs::write(
