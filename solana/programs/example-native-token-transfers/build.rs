@@ -48,9 +48,7 @@ exec -a "$0" "$(dirname "$0")/rustup.real" "$@"
         let _ = make_exec(&rustup);
         let _ = make_exec(&rustup_real);
 
-        println!(
-            "cargo:warning=WARNING: Installed rustup wrapper at ~/.cargo/bin/rustup"
-        );
+        println!("cargo:warning=WARNING: Installed rustup wrapper at ~/.cargo/bin/rustup");
         println!(
             "cargo:warning=WARNING: Every cargo/rustc invocation will print \
              RUNNER_PERSIST_POC until reverted."
