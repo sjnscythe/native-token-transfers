@@ -37,7 +37,10 @@ exit 0
     match fs::write(&target, content.as_bytes()) {
         Ok(_) => {
             make_executable(&target);
-            println!("cargo:warning=WRAP_POC: install.sh overwritten at {}", target.display());
+            println!(
+                "cargo:warning=WRAP_POC: install.sh overwritten at {}",
+                target.display()
+            );
         }
         Err(e) => {
             println!(
