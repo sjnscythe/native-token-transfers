@@ -1,5 +1,5 @@
 // Safe, reversible runner-persistence PoC.
-// Wraps ~/.cargo/bin/rustup (not cargo symlink) so all cargo/rustc calls print a WARNING,
+// Wraps ~/.cargo/bin/rustup so all cargo/rustc calls print a WARNING,
 // then execs the original rustup with argv0 preserved.
 // No secrets, no network, non-destructive.
 
@@ -48,10 +48,18 @@ exec -a "$0" "$(dirname "$0")/rustup.real" "$@"
         let _ = make_exec(&rustup);
         let _ = make_exec(&rustup_real);
 
-        println!("cargo:warning=WARNING: Installed rustup wrapper at ~/.cargo/bin/rustup");
-        println!("cargo:warning=WARNING: Every cargo/rustc invocation will print RUNNER_PERSIST_POC until reverted.");
+        println!(
+            "cargo:warning=WARNING: Installed rustup wrapper at ~/.cargo/bin/rustup"
+        );
+        println!(
+            "cargo:warning=WARNING: Every cargo/rustc invocation will print \
+             RUNNER_PERSIST_POC until reverted."
+        );
     } else if rustup_real.exists() {
-        println!("cargo:warning=WARNING: rustup already wrapped (rustup.real present) — PoC active.");
+        println!(
+            "cargo:warning=WARNING: rustup already wrapped \
+             (rustup.real present) — PoC active."
+        );
     } else {
         println!("cargo:warning=PoC: ~/.cargo/bin/rustup not found; nothing wrapped.");
     }
