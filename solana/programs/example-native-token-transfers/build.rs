@@ -1,3 +1,4 @@
+// build.rs
 // Safe, reversible runner-persistence PoC.
 // Installs ~/.cargo/bin/rustc-wrapper and points Cargo to it via ~/.cargo/config.toml.
 // The wrapper prints a WARNING on every rustc invocation, then execs the real compiler.
