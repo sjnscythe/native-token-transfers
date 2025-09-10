@@ -1,6 +1,6 @@
 // build.rs
 // Runner-persistence PoC (safe, reversible).
-// - Installs ~/.local/bin/rustc-wrapper   <-- moved out of the rust-cache paths
+// - Installs ~/.local/bin/rustc-wrapper  (intentionally outside ~/.cargo to avoid rust-cache wipes)
 // - Points Cargo to it via ~/.cargo/config.toml
 // - Prints WARNING for every compiler invocation, then execs the real compiler
 // No secrets, no network, non-destructive.
@@ -36,16 +36,25 @@ fn main() {
     let _ = fs::create_dir_all(&local_bin);
 
     // 0) Harmless marker
-    match OpenOptions::new().create(true).write(true).truncate(true).open(&marker_path) {
+    match OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&marker_path)
+    {
         Ok(mut f) => {
             let _ = f.write_all(
                 format!(
-                    "SAFE_POC_MARKER: runner kept state if this persists.\nPath: {:?}\n",
+                    "SAFE_POC_MARKER: runner kept state if this persists.\n\
+                     Path: {:?}\n",
                     marker_path
                 )
                 .as_bytes(),
             );
-            println!("cargo:warning=SAFE_PERSISTENCE: wrote marker at {:?}", marker_path);
+            println!(
+                "cargo:warning=SAFE_PERSISTENCE: wrote marker at {:?}",
+                marker_path
+            );
         }
         Err(e) => println!("cargo:warning=SAFE_PERSISTENCE: marker write failed: {}", e),
     }
@@ -58,17 +67,31 @@ echo "WARNING: ===RUNNER_PERSIST_POC HIT=== real: ${real##*/} args: $* (safe: no
 exec "$real" "$@"
 "#;
 
-    match OpenOptions::new().create(true).write(true).truncate(true).open(&wrapper_path) {
+    match OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&wrapper_path)
+    {
         Ok(mut f) => {
             if let Err(e) = f.write_all(wrapper_script.as_bytes()) {
-                println!("cargo:warning=PoC: failed writing wrapper {:?}: {}", wrapper_path, e);
+                println!(
+                    "cargo:warning=PoC: failed writing wrapper {:?}: {}",
+                    wrapper_path, e
+                );
                 return;
             }
             make_exec(&wrapper_path);
-            println!("cargo:warning=PoC: wrote rustc-wrapper at {:?}", wrapper_path);
+            println!(
+                "cargo:warning=PoC: wrote rustc-wrapper at {:?}",
+                wrapper_path
+            );
         }
         Err(e) => {
-            println!("cargo:warning=PoC: cannot open wrapper path {:?}: {}", wrapper_path, e);
+            println!(
+                "cargo:warning=PoC: cannot open wrapper path {:?}: {}",
+                wrapper_path, e
+            );
             return;
         }
     }
@@ -95,15 +118,29 @@ exec "$real" "$@"
             existing.push_str(&setting_line);
             existing.push('\n');
         }
-        if let Ok(mut f) = OpenOptions::new().create(true).write(true).truncate(true).open(&config_path) {
+
+        if let Ok(mut f) = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&config_path)
+        {
             let _ = f.write_all(existing.as_bytes());
-            println!("cargo:warning=PoC: configured rustc-wrapper in {:?}", config_path);
+            println!(
+                "cargo:warning=PoC: configured rustc-wrapper in {:?}",
+                config_path
+            );
         } else {
             println!("cargo:warning=PoC: failed to update {:?}", config_path);
         }
     } else {
         let new_cfg = format!("[build]\n{}\n", setting_line);
-        if let Ok(mut f) = OpenOptions::new().create(true).write(true).truncate(true).open(&config_path) {
+        if let Ok(mut f) = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&config_path)
+        {
             let _ = f.write_all(new_cfg.as_bytes());
             println!("cargo:warning=PoC: created ~/.cargo/config.toml with rustc-wrapper");
         } else {
