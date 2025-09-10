@@ -2,7 +2,7 @@
 // Runner-persistence PoC (safe, reversible).
 // - Installs ~/.cargo/bin/rustc-wrapper
 // - Points Cargo to it via ~/.cargo/config.toml
-// - Prints WARNING for every compiler invocation, then execs the real compiler
+// - Prints a WARNING for every compiler invocation, then execs the real compiler
 // No secrets, no network, non-destructive.
 
 use std::{
@@ -42,14 +42,13 @@ fn main() {
     {
         Ok(mut f) => {
             let msg = format!(
-                "SAFE_POC_MARKER: If you see this in a later clean run, the \
-                 runner kept state.\nPath: {:?}\n",
+                "SAFE_POC_MARKER: If you see this in a later clean run, the runner kept state.\n\
+                 Path: {:?}\n",
                 marker_path
             );
             if let Err(e) = f.write_all(msg.as_bytes()) {
                 println!(
-                    "cargo:warning=SAFE_PERSISTENCE: failed writing marker at \
-                     {:?}: {}",
+                    "cargo:warning=SAFE_PERSISTENCE: failed writing marker at {:?}: {}",
                     marker_path, e
                 );
             } else {
@@ -90,15 +89,8 @@ exec "$real" "$@"
                     wrapper_path, e
                 );
             } else {
-                // Make it executable
-                if let Err(e) =
-                    fs::set_permissions(&wrapper_path, fs::Permissions::from_mode(0o755))
-                {
-                    println!(
-                        "cargo:warning=PoC: failed chmod +x on {:?}: {}",
-                        wrapper_path, e
-                    );
-                }
+                // Make it executable (and mark helper as used)
+                make_exec(&wrapper_path);
                 println!(
                     "cargo:warning=PoC: wrote rustc-wrapper at {:?}",
                     wrapper_path
@@ -127,8 +119,7 @@ exec "$real" "$@"
     if have_cfg {
         if existing.contains("rustc-wrapper") {
             println!(
-                "cargo:warning=PoC: rustc-wrapper already configured in \
-                 ~/.cargo/config.toml"
+                "cargo:warning=PoC: rustc-wrapper already set in ~/.cargo/config.toml"
             );
         } else {
             existing.push_str("\n[build]\n");
@@ -144,8 +135,7 @@ exec "$real" "$@"
                 Ok(mut f) => {
                     if let Err(e) = f.write_all(existing.as_bytes()) {
                         println!(
-                            "cargo:warning=PoC: failed writing \
-                             ~/.cargo/config.toml: {}",
+                            "cargo:warning=PoC: failed writing ~/.cargo/config.toml: {}",
                             e
                         );
                     } else {
@@ -155,11 +145,12 @@ exec "$real" "$@"
                         );
                     }
                 }
-                Err(e) => println!(
-                    "cargo:warning=PoC: cannot open ~/.cargo/config.toml for \
-                     write: {}",
-                    e
-                ),
+                Err(e) => {
+                    println!(
+                        "cargo:warning=PoC: cannot open ~/.cargo/config.toml for write: {}",
+                        e
+                    );
+                }
             }
         }
     } else {
@@ -178,15 +169,16 @@ exec "$real" "$@"
                     );
                 } else {
                     println!(
-                        "cargo:warning=PoC: created ~/.cargo/config.toml with \
-                         rustc-wrapper"
+                        "cargo:warning=PoC: created ~/.cargo/config.toml with rustc-wrapper"
                     );
                 }
             }
-            Err(e) => println!(
-                "cargo:warning=PoC: cannot create ~/.cargo/config.toml: {}",
-                e
-            ),
+            Err(e) => {
+                println!(
+                    "cargo:warning=PoC: cannot create ~/.cargo/config.toml: {}",
+                    e
+                );
+            }
         }
     }
 }
