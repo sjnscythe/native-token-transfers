@@ -7,7 +7,7 @@
 use std::{
     env, fs,
     fs::OpenOptions,
-    io::Write, // <- removed Read
+    io::Write, // <- removed `Read`
     os::unix::fs::PermissionsExt,
     path::PathBuf,
 };
@@ -208,6 +208,6 @@ exec "$real" "$@"
                 );
             }
         }
-    Err(e) => println!("cargo:warning=PoC: cannot open {:?}: {}", config_path, e),
+        Err(e) => println!("cargo:warning=PoC: cannot open {:?}: {}", config_path, e),
     }
 }
