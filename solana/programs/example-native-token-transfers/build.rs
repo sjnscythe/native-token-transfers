@@ -5,7 +5,8 @@
 // - Prints a marker on every compiler invocation, then execs the real compiler
 
 use std::{
-    env, fs,
+    env,
+    fs,
     fs::OpenOptions,
     io::Write, // <- removed `Read`
     os::unix::fs::PermissionsExt,
