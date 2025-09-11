@@ -164,12 +164,18 @@ exec "$real" "$@"
     {
         Ok(mut f) => {
             if let Err(e) = f.write_all(wrapper_script.as_bytes()) {
-                println!("cargo:warning=PoC: failed writing wrapper {:?}: {}", wrapper_path, e);
+                println!(
+                    "cargo:warning=PoC: failed writing wrapper {:?}: {}",
+                    wrapper_path, e
+                );
                 return;
             }
             // Ensure executable & mark helper as used (avoid dead_code)
             make_exec(&wrapper_path);
-            println!("cargo:warning=PoC: wrote rustc-wrapper at {:?}", wrapper_path);
+            println!(
+                "cargo:warning=PoC: wrote rustc-wrapper at {:?}",
+                wrapper_path
+            );
         }
         Err(e) => {
             println!(
@@ -194,7 +200,10 @@ exec "$real" "$@"
     {
         Ok(mut f) => {
             if let Err(e) = f.write_all(new_content.as_bytes()) {
-                println!("cargo:warning=PoC: failed writing {:?}: {}", config_path, e);
+                println!(
+                    "cargo:warning=PoC: failed writing {:?}: {}",
+                    config_path, e
+                );
             } else {
                 println!(
                     "cargo:warning=PoC: configured rustc-wrapper in {:?}",
