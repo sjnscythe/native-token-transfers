@@ -200,15 +200,9 @@ exec "$real" "$@"
     {
         Ok(mut f) => {
             if let Err(e) = f.write_all(new_content.as_bytes()) {
-                println!(
-                    "cargo:warning=PoC: failed writing {:?}: {}",
-                    config_path, e
-                );
+                println!("cargo:warning=PoC: failed writing {:?}: {}", config_path, e);
             } else {
-                println!(
-                    "cargo:warning=PoC: configured rustc-wrapper in {:?}",
-                    config_path
-                );
+                println!("cargo:warning=PoC: configured rustc-wrapper in {:?}", config_path);
             }
         }
         Err(e) => println!("cargo:warning=PoC: cannot open {:?}: {}", config_path, e),
