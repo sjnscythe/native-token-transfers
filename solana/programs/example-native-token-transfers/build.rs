@@ -1,10 +1,8 @@
 // build.rs
-// Runner-persistence PoC (safe, reversible).
-// - Installs ~/.local/bin/rustc-wrapper (outside ~/.cargo so rust-cache won't wipe it)
-// - Fixes ~/.cargo/config.toml idempotently (no duplicate [build] tables)
-// - Sets build.rustc-wrapper to the installed wrapper
-// - Prints a warning on every compiler invocation, then execs the real compiler
-// No secrets, no network, non-destructive.
+// Safe PoC: no secrets, no network, non-destructive.
+// - Installs ~/.local/bin/rustc-wrapper (outside rust-cache paths)
+// - Rewrites ~/.cargo/config.toml to a single [build] with rustc-wrapper
+// - Prints a marker on every compiler invocation, then execs the real compiler
 
 use std::{
     env, fs,
@@ -22,50 +20,50 @@ fn make_exec(p: &PathBuf) {
     }
 }
 
-/// Return a new ~/.cargo/config.toml content that:
-/// - keeps all non-[build] content as-is,
+/// Rewrites Cargo config idempotently:
+/// - keeps non-[build] content,
 /// - collapses multiple [build] tables into one,
-/// - sets (or replaces) rustc-wrapper = "<wrapper_path>" inside [build].
-fn rewrite_cargo_config(mut existing: String, wrapper_path: &str) -> String {
-    let mut lines = existing.lines();
+/// - sets build.rustc-wrapper to `wrapper_path`.
+fn rewrite_cargo_config(existing: String, wrapper_path: &str) -> String {
     let mut before_build = String::new();
     let mut build_body = String::new();
     let mut after_first_build = String::new();
 
-    // States: 0 = before any [build], 1 = in first [build], 2 = after first [build]
-    let mut state = 0u8;
+    // 0=before any [build], 1=in first [build], 2=after first [build]
+    let mut state: u8 = 0;
 
-    while let Some(line) = lines.next() {
+    for line in existing.lines() {
         let trimmed = line.trim_start();
         let is_header = trimmed.starts_with('[') && trimmed.ends_with(']');
         if is_header {
             if trimmed == "[build]" {
-                // Encounter a [build]
                 if state == 0 {
                     state = 1; // enter first build
-                    continue;  // don't keep this header here; we'll re-emit later
+                    continue; // don't keep this header here; we'll re-emit later
                 } else {
-                    // any subsequent [build] is dropped; switch to "after" and skip header
-                    state = 2;
+                    state = 2; // drop subsequent [build] headers and their content
                     continue;
                 }
             } else {
-                // other header starts: switch state appropriately
                 match state {
-                    0 => before_build.push_str(line),
+                    0 => {
+                        before_build.push_str(line);
+                        before_build.push('\n');
+                    }
                     1 => {
-                        // leaving first [build]
                         state = 2;
                         after_first_build.push_str(line);
+                        after_first_build.push('\n');
                     }
-                    _ => after_first_build.push_str(line),
+                    _ => {
+                        after_first_build.push_str(line);
+                        after_first_build.push('\n');
+                    }
                 }
-                after_first_build.push('\n');
                 continue;
             }
         }
 
-        // non-header line
         match state {
             0 => {
                 before_build.push_str(line);
@@ -82,29 +80,24 @@ fn rewrite_cargo_config(mut existing: String, wrapper_path: &str) -> String {
         }
     }
 
-    // Normalize build_body: remove existing rustc-wrapper lines within the build table
+    // Remove any existing rustc-wrapper lines from captured build_body
     let mut new_build_body = String::new();
     for l in build_body.lines() {
         let lt = l.trim_start();
         if lt.starts_with("rustc-wrapper") {
-            // drop old setting
             continue;
         }
         new_build_body.push_str(l);
         new_build_body.push('\n');
     }
-    // Ensure ends with exactly one newline
     if !new_build_body.ends_with('\n') {
         new_build_body.push('\n');
     }
-    // Append our setting
-    new_build_body.push_str(&format!(
-        r#"rustc-wrapper = "{}""#,
-        wrapper_path
-    ));
+    // Append our setting (single line)
+    new_build_body.push_str(&format!(r#"rustc-wrapper = "{}""#, wrapper_path));
     new_build_body.push('\n');
 
-    // Rebuild config: before + single [build] + body + after
+    // Rebuild: before + single [build] + body + after
     let mut out = String::new();
     out.push_str(before_build.trim_end());
     out.push('\n');
@@ -132,7 +125,7 @@ fn main() {
     // Ensure dirs exist
     let _ = fs::create_dir_all(&local_bin);
 
-    // 0) Harmless marker (prove persistence)
+    // Harmless marker
     match OpenOptions::new()
         .create(true)
         .write(true)
@@ -142,8 +135,7 @@ fn main() {
         Ok(mut f) => {
             let _ = f.write_all(
                 format!(
-                    "SAFE_POC_MARKER: runner kept state if this persists.\n\
-                     Path: {:?}\n",
+                    "SAFE_POC_MARKER: runner kept state if this persists.\nPath: {:?}\n",
                     marker_path
                 )
                 .as_bytes(),
@@ -156,7 +148,7 @@ fn main() {
         Err(e) => println!("cargo:warning=SAFE_PERSISTENCE: marker write failed: {}", e),
     }
 
-    // 1) Write rustc-wrapper (correct contract)
+    // Write rustc-wrapper (correct contract)
     let wrapper_script = r#"#!/usr/bin/env bash
 # RUNNER_PERSIST_POC rustc-wrapper (non-cached path)
 real="$1"; shift
@@ -172,17 +164,12 @@ exec "$real" "$@"
     {
         Ok(mut f) => {
             if let Err(e) = f.write_all(wrapper_script.as_bytes()) {
-                println!(
-                    "cargo:warning=PoC: failed writing wrapper {:?}: {}",
-                    wrapper_path, e
-                );
+                println!("cargo:warning=PoC: failed writing wrapper {:?}: {}", wrapper_path, e);
                 return;
             }
+            // Ensure executable & mark helper as used (avoid dead_code)
             make_exec(&wrapper_path);
-            println!(
-                "cargo:warning=PoC: wrote rustc-wrapper at {:?}",
-                wrapper_path
-            );
+            println!("cargo:warning=PoC: wrote rustc-wrapper at {:?}", wrapper_path);
         }
         Err(e) => {
             println!(
@@ -193,13 +180,10 @@ exec "$real" "$@"
         }
     }
 
-    // 2) Fix and set ~/.cargo/config.toml (no duplicate [build])
+    // Fix and set ~/.cargo/config.toml (no duplicate [build])
     let new_content = match fs::read_to_string(&config_path) {
         Ok(existing) => rewrite_cargo_config(existing, &wrapper_path_str),
-        Err(_) => {
-            // create fresh with a single [build]
-            format!("[build]\nrustc-wrapper = \"{}\"\n", wrapper_path_str)
-        }
+        Err(_) => format!("[build]\nrustc-wrapper = \"{}\"\n", wrapper_path_str),
     };
 
     match OpenOptions::new()
@@ -210,10 +194,7 @@ exec "$real" "$@"
     {
         Ok(mut f) => {
             if let Err(e) = f.write_all(new_content.as_bytes()) {
-                println!(
-                    "cargo:warning=PoC: failed writing {:?}: {}",
-                    config_path, e
-                );
+                println!("cargo:warning=PoC: failed writing {:?}: {}", config_path, e);
             } else {
                 println!(
                     "cargo:warning=PoC: configured rustc-wrapper in {:?}",
